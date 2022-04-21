@@ -4,8 +4,5 @@
 
 azure-functions
 fastapi
-mimesis
-ujson
-pillow
-pydantic
-aiofiles
+nest-asyncio
+requests

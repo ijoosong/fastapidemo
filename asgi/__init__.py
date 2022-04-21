@@ -1,9 +1,10 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
+# From https://github.com/Azure/azure-functions-python-library/blob/800a75b91b4b15aef09e551b053c33c7184d6b99/azure/functions/_http_asgi.py
 
-import asyncio
-from typing import Callable, Dict, List, Tuple, Optional, Any, Union
+from typing import Dict, List, Tuple, Optional, Any, Union
 import logging
+import asyncio
 from wsgiref.headers import Headers
 
 from azure.functions._abc import Context
@@ -12,8 +13,6 @@ from azure.functions._http_wsgi import WsgiRequest
 
 
 class AsgiRequest(WsgiRequest):
-    _environ_cache: Optional[Dict[str, Any]] = None
-
     def __init__(self, func_req: HttpRequest,
                  func_ctx: Optional[Context] = None):
         self.asgi_version = "2.1"
@@ -44,7 +43,10 @@ class AsgiRequest(WsgiRequest):
             "root_path": self.script_name,
             "headers": self._get_encoded_http_headers(),
             "server": self._get_server_address(),
-            "client": None
+            "client": None,
+            "azure_functions.function_directory": self.af_function_directory,
+            "azure_functions.function_name": self.af_function_name,
+            "azure_functions.invocation_id": self.af_invocation_id
         }
         # Notes, missing client name, port
 
@@ -82,7 +84,8 @@ class AsgiResponse:
 
     def _handle_http_response_body(self, message: Dict[str, Any]):
         self._buffer.append(message["body"])
-        # TODO : Handle more_body flag
+        # XXX : Chunked bodies not supported, see
+        # https://github.com/Azure/azure-functions-host/issues/4926
 
     async def _receive(self):
         return {
@@ -102,32 +105,46 @@ class AsgiResponse:
 
 
 class AsgiMiddleware:
+    """This middleware is to adapt an ASGI supported Python server
+    framework into Azure Functions. It can be used by either calling the
+    .handle() function or exposing the .main property in a HttpTrigger.
+    """
+    _logger = logging.getLogger('azure.functions.AsgiMiddleware')
+    _usage_reported = False
+
     def __init__(self, app):
-        logging.debug("Instantiating ASGI middleware.")
+        """Instantiate an ASGI middleware to convert Azure Functions HTTP
+        request into ASGI Python object. Example on handling ASGI app in a HTTP
+        trigger by overwriting the .main() method:
+        import azure.functions as func
+        from FastapiApp import app
+        main = func.AsgiMiddleware(app).main
+        """
+        if not self._usage_reported:
+            self._logger.info("Instantiating Azure Functions ASGI middleware.")
+            self._usage_reported = True
+
         self._app = app
-        self.loop = asyncio.new_event_loop()
-        logging.debug("asyncio event loop initialized.")
+        self._loop = asyncio.new_event_loop()
+        self.main = self._handle
 
-    # Usage
-    # main = func.AsgiMiddleware(app).main
-    @property
-    def main(self) -> Callable[[HttpRequest, Context], HttpResponse]:
-        return self._handle
-
-    # Usage
-    # return func.AsgiMiddleware(app).handle(req, context)
-    def handle(
-        self, req: HttpRequest, context: Optional[Context] = None
-    ) -> HttpResponse:
-        logging.info(f"Handling {req.url} as ASGI request.")
+    def handle(self, req: HttpRequest, context: Optional[Context] = None):
+        """Method to convert an Azure Functions HTTP request into a ASGI
+        Python object. Example on handling ASGI app in a HTTP trigger by
+        calling .handle() in .main() method:
+        import azure.functions as func
+        from FastapiApp import app
+        def main(req, context):
+            return func.AsgiMiddleware(app).handle(req, context)
+        """
+        self._logger.debug(f"Handling {req.url} as an ASGI request.")
         return self._handle(req, context)
 
-    def _handle(self, req: HttpRequest,
-                context: Optional[Context]) -> HttpResponse:
+    def _handle(self, req, context):
         asgi_request = AsgiRequest(req, context)
-        asyncio.set_event_loop(self.loop)
+        asyncio.set_event_loop(self._loop)
         scope = asgi_request.to_asgi_http_scope()
-        asgi_response = self.loop.run_until_complete(
+        asgi_response = self._loop.run_until_complete(
             AsgiResponse.from_app(self._app, scope, req.get_body())
         )
 
