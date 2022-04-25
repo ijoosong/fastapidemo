@@ -5,5 +5,5 @@
 azure-functions
 fastapi
 nest-asyncio
-requests
 uvicorn
+requests

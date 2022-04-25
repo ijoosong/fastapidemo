@@ -13,6 +13,7 @@ async def index():
   return {
       "info": "Try /pokemon/pikachu for a quick demo.",}
 
+
 @app.get("/pokemon/{pokemon}")
 async def get_types(pokemon: str,):
   pokemon_response = requests.get(f'https://pokeapi.co/api/v2/pokemon/{pokemon}')
@@ -63,6 +64,6 @@ async def main(req: func.HttpRequest, context: func.Context, doc: func.Out[func.
 
     if pokemon:
       doc.set(func.Document.from_dict(pokemon))
-  
+
   #b'{"_HttpResponse__status_code":200,"_HttpResponse__mimetype":"text/plain","_HttpResponse__charset":"utf-8","_HttpResponse__headers":{},"_HttpResponse__body":"{\'name\': \'bulbasaur\', \'weaknesses\': [\'flying\', \'ice\', \'fire\', \'psychic\'], \'resistances\': [\'poison\', \'water\', \'bug\', \'ground\', \'fairy\', \'electric\', \'fighting\', \'grass\'], \'no_damage_from\': []}"}'
   return output
