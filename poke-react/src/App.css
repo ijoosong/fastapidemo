@@ -42,17 +42,31 @@ body {
   opacity: .7;
 }
 
+.inputs {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
 input {
-  margin: auto;
   padding: 5px;
-  display: block;
+  display: inline-block;
   border: 3px solid #282828;
   border-radius: 10px;
   font-size: 20px;
   text-align: center;
 }
 
-input:focus {
+button {
+  margin-left: 5px;
+  padding: 7px;
+  border: 3px solid #282828;
+  border-radius: 10px;
+  background: #fff;
+}
+
+input:focus, button:focus {
   outline: 3px dashed #282828;
 }
 
